@@ -1,0 +1,103 @@
+#include "pitches.h"
+
+#define BUZZER_PIN   8
+#define SWITCH_PIN   2  // switches sounds and LEDs on and off
+#define LDR_PIN      A0 // dark = slow tempo, bright = normal tempo
+#define GREEN_LED    4  // turned on when tempo is normal 
+#define RED_LED      5  // turned on when tempo is slow (* 2.5)
+
+#define DARK_THRESHOLD 420 // darkness level from 0-1023
+
+#define NORMAL_TEMPO 1.0
+#define CREEPY_TEMPO 2.5
+
+int melody[] = {
+  // Copyright (c) 2025 HiBit <https://www.hibit.dev>
+  NOTE_F4, NOTE_F4, NOTE_F4, NOTE_D4, NOTE_DS4, NOTE_F4, REST,
+  NOTE_F4, NOTE_F4, NOTE_F4, NOTE_D4, NOTE_DS4, NOTE_F4, REST,
+  NOTE_G4, NOTE_G4, NOTE_G4, NOTE_A4, NOTE_AS4, NOTE_AS4, NOTE_A4, NOTE_G4,
+  NOTE_F4, NOTE_F4, NOTE_F4, NOTE_G4, NOTE_F4, REST,
+
+  NOTE_F4, NOTE_F4, NOTE_F4, NOTE_D4, NOTE_DS4, NOTE_F4, REST,
+  NOTE_F4, NOTE_F4, NOTE_F4, NOTE_D4, NOTE_DS4, NOTE_F4, REST,
+  NOTE_G4, NOTE_G4, NOTE_G4, NOTE_C5, NOTE_AS4, NOTE_A4, NOTE_G4,
+  NOTE_A4, NOTE_AS4, NOTE_AS4, NOTE_AS4,
+
+  REST
+};
+
+int durations[] = {
+  6, 6, 6, 4, 6, 2, 3,
+  6, 6, 6, 4, 6, 2, 3,
+  4, 6, 4, 6, 4, 6, 4, 6,
+  4, 6, 4, 6, 2, 3,
+
+  6, 6, 6, 4, 6, 2, 3,
+  6, 6, 6, 4, 6, 2, 3,
+  4, 6, 4, 6, 4, 6, 4,
+  6, 2, 2, 2,
+
+  1
+};
+
+void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(SWITCH_PIN, INPUT_PULLUP); // active LOW (when pressed = LOW), no resistor needed
+  pinMode(GREEN_LED,  OUTPUT);
+  pinMode(RED_LED,    OUTPUT);
+}
+
+void loop() {
+  // reads switch (active LOW with INPUT_PULLUP)
+  bool switchOn = (digitalRead(SWITCH_PIN) == LOW);
+
+  if (!switchOn) {
+    // switch OFF: sounds and LEDs turn off
+    noTone(BUZZER_PIN);
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(RED_LED,   LOW);
+    return; // skip the rest of loop
+  }
+
+  // reads LDR
+  int ldrValue = analogRead(LDR_PIN);
+  bool isDark  = (ldrValue < DARK_THRESHOLD);
+
+  digitalWrite(GREEN_LED, isDark ? LOW  : HIGH);
+  digitalWrite(RED_LED,   isDark ? HIGH : LOW);
+
+  // picks the tempo multiplier
+  float tempoMult = isDark ? CREEPY_TEMPO : NORMAL_TEMPO;
+
+  // plays the melody
+  int size = sizeof(durations) / sizeof(int);
+
+  for (int note = 0; note < size; note++) {
+
+    // re-checks switch mid-melody so it stops promptly
+    if (digitalRead(SWITCH_PIN) == HIGH) {
+      noTone(BUZZER_PIN);
+      digitalWrite(GREEN_LED, LOW);
+      digitalWrite(RED_LED,   LOW);
+      return;
+    }
+
+    // re-reads LDR mid-melody to update LEDs & tempo on the fly
+    ldrValue = analogRead(LDR_PIN);
+    isDark   = (ldrValue < DARK_THRESHOLD);
+    tempoMult = isDark ? CREEPY_TEMPO : NORMAL_TEMPO;
+    digitalWrite(GREEN_LED, isDark ? LOW  : HIGH);
+    digitalWrite(RED_LED,   isDark ? HIGH : LOW);
+
+    // calculates note duration with tempo multiplier
+    int duration = (int)((1000.0 / durations[note]) * tempoMult);
+
+    tone(BUZZER_PIN, melody[note], duration);
+
+    // pause between notes (note duration + 30%)
+    int pauseBetweenNotes = (int)(duration * 1.30);
+    delay(pauseBetweenNotes);
+
+    noTone(BUZZER_PIN);
+  }
+}
